@@ -1,32 +1,32 @@
 Endpoints
 🛑 = Authorization header required
 
-GET /loginUrl
-Gets login url to google.
+	GET /loginUrl
+	Gets login url to google.
 
-GET /accessToken?state=xxx&code=xxx
-Gets access token via state and code.
+	GET /accessToken?state=xxx&code=xxx
+	Gets access token via state and code.
 
-GET /userData 🛑
-Gets user data.
+	GET /userData 🛑
+	Gets user data.
 
-POST /createArticle 🛑
-Creates article.
+	POST /createArticle 🛑
+	Creates article.
 
-GET /articles/:id
-Gets article.
-	
-DELETE /deleteArticle 🛑
-Deletes article
+	GET /articles/:id
+	Gets article.
 
-GET /fetchTags
-Gets tags.
+	DELETE /deleteArticle 🛑
+	Deletes article
 
-POST /uploadImage 🛑
-Uploads an image.
+	GET /fetchTags
+	Gets tags.
 
-GET /images/:imageName
-Gets an image.
+	POST /uploadImage 🛑
+	Uploads an image.
 
-GET /searchArticles?search=xxx&limit=25&offset=0
-Gets list of articles.
+	GET /images/:imageName
+	Gets an image.
+
+	GET /searchArticles?search=xxx&limit=25&offset=0
+	Gets list of articles.
