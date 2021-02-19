@@ -77,26 +77,26 @@ func main() {
 	// Create gin handlers
 	router := gin.Default()
 
-	// Configure up cors
+	// Configure cors
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"http://127.0.0.1:8080", "http://localhost:8080"}
 	config.AllowMethods = []string{"GET", "POST", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	router.Use(cors.New(config))
 
-	// Rate limiting
+	// Rate throttling
 	maxEventsPerSec := 5
 	maxBurstSize := 15
 	router.Use(limiter.Throttle(maxEventsPerSec, maxBurstSize))
 
-	// Gets url to login to google
+	// Declare routes
 	router.GET("/loginUrl", loginUrlHandler)
 	router.GET("/accessToken", accessTokenHandler)
 	router.GET("/userData", accessTokenMiddleware, userDataHandler)
 
 	router.POST("/createArticle", accessTokenMiddleware, createArticleHandler)
 	router.GET("/articles/:id", fetchArticleHandler)
-	router.DELETE("/deleteArticle", accessTokenMiddleware, deleteArticleHandler)
+	router.DELETE("/articles/:id", accessTokenMiddleware, deleteArticleHandler)
 	router.GET("/fetchTags", fetchTagsHandler)
 
 	router.POST("/uploadImage", accessTokenMiddleware, uploadImageHandler)
@@ -148,7 +148,7 @@ func accessTokenMiddleware(c *gin.Context) {
 	// Send token to google and get data back
 	response, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + accessToken)
 	if err != nil {
-		panic(unknownError)
+		panic(err)
 	}
 	defer response.Body.Close()
 	var data map[string]interface{}
@@ -168,15 +168,7 @@ func accessTokenMiddleware(c *gin.Context) {
 	c.Next()
 }
 
-/*
-	Responds with user data
-	{
-		"id":      id,
-		"name":    name,
-		"email":   email,
-		"picture": picture,
-	}
-*/
+// Responds with google user data
 func userDataHandler(c *gin.Context) {
 	defer handleError(c)
 
@@ -255,6 +247,7 @@ func createArticleHandler(c *gin.Context) {
 		}
 	}
 
+	// Create new article and scan id
 	var id int
 	q := `INSERT INTO articles (author, author_google_id, image_url, title, body, tags) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
 	err = db.QueryRow(q, author, authorGoogleId, imageUrl, title, body, tags).Scan(&id)
@@ -262,6 +255,7 @@ func createArticleHandler(c *gin.Context) {
 		panic(err)
 	}
 
+	// Calculate tsvector for article
 	q = `UPDATE articles SET vector=to_tsvector($1 || ' ' || $2 || ' ' || $3 || ' ' || $4) WHERE id=$5`
 	_, err = db.Exec(q, title, tags, body, author, id)
 	if err != nil {
@@ -278,20 +272,24 @@ func fetchArticleHandler(c *gin.Context) {
 
 	var id int
 	var author string
+	var authorGoogleId string
 	var imageUrl string
 	var title string
 	var body string
 	var tags string
+	var views int
 	var created time.Time
 
+	// Check if id is valid
 	temp, err := strconv.Atoi(c.Param("id"))
 	if err != nil || temp < 0 {
 		panic(invalidNumber)
 	}
 
-	q := `SELECT id, author, image_url, title, body, tags, created FROM articles WHERE id=$1`
+	// Fetch article
+	q := `SELECT id, author, author_google_id, image_url, title, body, tags, views, created FROM articles WHERE id=$1`
 	row := db.QueryRow(q, c.Param("id"))
-	err = row.Scan(&id, &author, &imageUrl, &title, &body, &tags, &created)
+	err = row.Scan(&id, &author, &authorGoogleId, &imageUrl, &title, &body, &tags, &views, &created)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -301,16 +299,20 @@ func fetchArticleHandler(c *gin.Context) {
 		}
 	}
 
-	// Fetch google user info
+	// Increment view column
+	q = `UPDATE articles SET views = views + 1 WHERE id=$1`
+	_, err = db.Exec(q, id)
 
 	c.JSON(200, gin.H{
-		"id":       id,
-		"author":   author,
-		"imageUrl": imageUrl,
-		"title":    title,
-		"body":     body,
-		"tags":     strings.Split(tags, ","),
-		"created":  created,
+		"id":             id,
+		"author":         author,
+		"authorGoogleId": toSHA1(authorGoogleId),
+		"imageUrl":       imageUrl,
+		"title":          title,
+		"body":           body,
+		"tags":           strings.Split(tags, ","),
+		"views":          views,
+		"created":        created,
 	})
 
 }
@@ -319,13 +321,15 @@ func deleteArticleHandler(c *gin.Context) {
 	defer handleError(c)
 
 	authorGoogleId, _ := c.Get("id")
-	articleId := c.Query("id")
+	articleId := c.Param("id")
 
-	temp, err := strconv.Atoi(c.Query("id"))
+	// Check validity of id
+	temp, err := strconv.Atoi(c.Param("id"))
 	if err != nil || temp < 0 {
 		panic(invalidNumber)
 	}
 
+	// Check if article exists
 	q := `SELECT author_google_id FROM articles WHERE id=$1`
 	row := db.QueryRow(q, articleId)
 	var id string
@@ -343,12 +347,16 @@ func deleteArticleHandler(c *gin.Context) {
 		panic(noPermission)
 	}
 
+	// Delete article
 	q = `DELETE FROM articles WHERE id=$1`
 	_, err = db.Exec(q, articleId)
 	if err != nil {
 		panic(err)
 	}
-	c.Status(200)
+
+	c.JSON(200, gin.H{
+		"id": articleId,
+	})
 }
 
 func fetchTagsHandler(c *gin.Context) {
@@ -406,11 +414,10 @@ func searchArticlesHandler(c *gin.Context) {
 
 	var rows *sql.Rows
 	if len(searchWords) == 1 && searchWords[0] == "" {
-		q := "SELECT id, author, image_url, title, tags, created FROM articles ORDER BY $1 LIMIT $2 OFFSET $3"
+		q := "SELECT id, author, image_url, title, tags, views, created FROM articles ORDER BY $1 LIMIT $2 OFFSET $3"
 		rows, err = db.Query(q, orderBy, limit, offset)
 	} else {
-		q := "SELECT id, author, image_url, title, tags, created FROM articles WHERE vector @@ to_tsquery($1) ORDER BY $2 LIMIT $3 OFFSET $4"
-		fmt.Println(search)
+		q := "SELECT id, author, image_url, title, tags, views, created FROM articles WHERE vector @@ to_tsquery($1) ORDER BY $2 LIMIT $3 OFFSET $4"
 		rows, err = db.Query(q, search, orderBy, limit, offset)
 	}
 
@@ -427,8 +434,9 @@ func searchArticlesHandler(c *gin.Context) {
 		var imageUrl string
 		var title string
 		var tags string
+		var views int
 		var created time.Time
-		err = rows.Scan(&id, &author, &imageUrl, &title, &tags, &created)
+		err = rows.Scan(&id, &author, &imageUrl, &title, &tags, &views, &created)
 		if err != nil {
 			panic(err)
 		}
@@ -438,6 +446,7 @@ func searchArticlesHandler(c *gin.Context) {
 			"imageUrl": imageUrl,
 			"title":    title,
 			"tags":     strings.Split(tags, ","),
+			"views":    views,
 			"created":  created,
 		})
 	}
@@ -473,7 +482,7 @@ func uploadImageHandler(c *gin.Context) {
 
 	file, err := multipart.Open()
 	if err != nil {
-		panic(unknownError)
+		panic(err)
 	}
 
 	now := time.Now()
@@ -486,7 +495,7 @@ func uploadImageHandler(c *gin.Context) {
 	})
 
 	if err != nil {
-		panic(unknownError)
+		panic(err)
 	}
 
 	c.JSON(200, gin.H{
@@ -507,7 +516,7 @@ func fetchImageHandler(c *gin.Context) {
 		Key:    &imageName,
 	})
 	if err != nil {
-		panic(unknownError)
+		panic(err)
 	}
 
 	c.Writer.Write(imageBuffer.Bytes())

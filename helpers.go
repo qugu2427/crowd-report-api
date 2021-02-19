@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/md5"
+	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
@@ -14,9 +15,9 @@ import (
 const (
 	alphaNum     = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"
 	maxImageSize = 500000
-	imageUrlRgx  = "^.{1,75}$" //^https:\/\/api.crowdreport.com\/[0-9a-zA-z]{1,75}$
-	titleRgx     = "^.{20,200}$"
-	tagsRgx      = "^.{1,200}$"
+	imageUrlRgx  = "^.{15,75}$"                                   //^https:\/\/api.crowdreport.com\/[0-9a-zA-z]{1,75}$
+	titleRgx     = "^[a-zA-Z\\d][a-zA-Z0\\d ]{13,73}[a-zA-Z\\d]$" //^.{15,75}$
+	tagsRgx      = "^.{1,75}$"
 	tagRgx       = "^\\/?(h[1-6]|p|br|u|strong|em|ul|ol|li|(span|img|iframe)( ?(class=\"[^\"]*\"|style=\"((background-color|color): ?rgb\\( ?[0-9]{1,3}, ?[0-9]{1,3}, ?[0-9]{1,3}\\); ?){1,2}\"|src=\"[^\"]*\"|frameborder=\"[^\"]*\"|allowfullscreen=\"(true|false)\")){0,5}?)$"
 	imagePath    = "http://localhost:4000/images/"
 )
@@ -60,6 +61,11 @@ func randInt(min int, max int) int {
 func toMd5(str string) string {
 	state := md5.Sum([]byte((str)))
 	return hex.EncodeToString(state[:])
+}
+
+func toSHA1(str string) string {
+	hash := sha1.Sum([]byte((str)))
+	return hex.EncodeToString(hash[:])
 }
 
 func validateArticleBody(body string) bool {
