@@ -1,15 +1,12 @@
 package main
 
 import (
-	"crypto/md5"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const (
@@ -42,25 +39,6 @@ func isAllowedMime(mime string) bool {
 		}
 	}
 	return false
-}
-
-func generateStateSalt(l int) string {
-	rand.Seed(time.Now().UTC().UnixNano())
-	bytes := make([]byte, l)
-	for i := 0; i < l; i++ {
-		bytes[i] = byte(randInt(65, 90))
-	}
-	return string(bytes)
-}
-
-func randInt(min int, max int) int {
-	return min + rand.Intn(max-min)
-}
-
-// Converts string to md5 hash hex string
-func toMd5(str string) string {
-	state := md5.Sum([]byte((str)))
-	return hex.EncodeToString(state[:])
 }
 
 func toSHA1(str string) string {

@@ -29,7 +29,8 @@ import (
 
 var (
 	port              string
-	stateSalt         = generateStateSalt(30)
+	stateSalt         string
+	gIdSalt           string
 	googleOauthConfig *oauth2.Config
 	psqlInfo          string
 	reCaptchaSecret   string
@@ -45,6 +46,8 @@ func init() {
 		log.Fatal("failed to load secrets.env file")
 	}
 	port = os.Getenv("PORT")
+	stateSalt = os.Getenv("STATE_SALT")
+	gIdSalt = os.Getenv("GID_SALT")
 	psqlInfo = os.Getenv("PSQL_INFO")
 	reCaptchaSecret = os.Getenv("RECAPTCHA_SECRET")
 	awsBucket = os.Getenv("AWS_S3_BUCKET")
@@ -79,7 +82,7 @@ func main() {
 
 	// Configure cors
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://127.0.0.1:8080", "http://localhost:8080"}
+	config.AllowOrigins = []string{"http://127.0.0.1:8080", "http://localhost:8080", "https://www.google.com"}
 	config.AllowMethods = []string{"GET", "POST", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	router.Use(cors.New(config))
@@ -99,6 +102,9 @@ func main() {
 	router.DELETE("/articles/:id", accessTokenMiddleware, deleteArticleHandler)
 	router.GET("/fetchTags", fetchTagsHandler)
 
+	router.GET("/articles/:id/hearted", accessTokenMiddleware, fetchHeartedHandler)
+	router.POST("/toggleHeart", accessTokenMiddleware, toggleHeartHandler)
+
 	router.POST("/uploadImage", accessTokenMiddleware, uploadImageHandler)
 	router.GET("/images/:imageName", fetchImageHandler)
 
@@ -110,7 +116,7 @@ func main() {
 func loginUrlHandler(c *gin.Context) {
 	defer handleError(c)
 	// Returns login url to login to google
-	url := googleOauthConfig.AuthCodeURL(toMd5(c.ClientIP() + stateSalt))
+	url := googleOauthConfig.AuthCodeURL(toSHA1(c.ClientIP() + stateSalt))
 	c.JSON(200, gin.H{
 		"loginUrl": url,
 	})
@@ -121,7 +127,7 @@ func accessTokenHandler(c *gin.Context) {
 	defer handleError(c)
 	// Check state
 	queryState := c.Query("state")
-	if toMd5(c.ClientIP()+stateSalt) != queryState {
+	if toSHA1(c.ClientIP()+stateSalt) != queryState {
 		panic(invalidState)
 	}
 	// Get token
@@ -178,7 +184,7 @@ func userDataHandler(c *gin.Context) {
 	picture, _ := c.Get("picture")
 
 	c.JSON(200, gin.H{
-		"id":      id,
+		"id":      toSHA1(id.(string) + gIdSalt),
 		"name":    name,
 		"email":   email,
 		"picture": picture,
@@ -193,7 +199,7 @@ func createArticleHandler(c *gin.Context) {
 	author, _ := c.Get("name")
 	authorGoogleId, _ := c.Get("id")
 	imageUrl := strings.TrimSpace(c.DefaultPostForm("imageUrl", ""))
-	title := strings.TrimSpace(c.DefaultPostForm("title", ""))
+	title := c.DefaultPostForm("title", "")
 	body := c.DefaultPostForm("body", "")
 	tags := strings.TrimSpace(c.DefaultPostForm("tags", ""))
 	captcha := c.DefaultPostForm("captcha", "")
@@ -207,28 +213,33 @@ func createArticleHandler(c *gin.Context) {
 	// Check validity of image url
 	match, _ := regexp.MatchString(imageUrlRgx, imageUrl)
 	if !match {
+		fmt.Println("Inavlid image url.")
 		panic(invalidArticle)
 	}
 
 	// Check validity of title
 	match, _ = regexp.MatchString(titleRgx, title)
 	if !match {
+		fmt.Println("Inavlid title.")
 		panic(invalidArticle)
 	}
 
 	// Check tags string validity
 	match, _ = regexp.MatchString(tagsRgx, tags)
 	if !match {
+		fmt.Println("Inavlid tags string.")
 		panic(invalidArticle)
 	}
 
 	// Check body length validity
 	if len(body) < 300 || len(body) > 10000 {
+		fmt.Println("Inavlid body length.")
 		panic(invalidArticle)
 	}
 
 	// Check validity of body
 	if !validateArticleBody(body) {
+		fmt.Println("Inavlid body.")
 		panic(invalidArticle)
 	}
 
@@ -278,6 +289,7 @@ func fetchArticleHandler(c *gin.Context) {
 	var body string
 	var tags string
 	var views int
+	var hearts int
 	var created time.Time
 
 	// Check if id is valid
@@ -287,9 +299,9 @@ func fetchArticleHandler(c *gin.Context) {
 	}
 
 	// Fetch article
-	q := `SELECT id, author, author_google_id, image_url, title, body, tags, views, created FROM articles WHERE id=$1`
+	q := `SELECT id, author, author_google_id, image_url, title, body, tags, views, hearts, created FROM articles WHERE id=$1`
 	row := db.QueryRow(q, c.Param("id"))
-	err = row.Scan(&id, &author, &authorGoogleId, &imageUrl, &title, &body, &tags, &views, &created)
+	err = row.Scan(&id, &author, &authorGoogleId, &imageUrl, &title, &body, &tags, &views, &hearts, &created)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -306,12 +318,13 @@ func fetchArticleHandler(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"id":             id,
 		"author":         author,
-		"authorGoogleId": toSHA1(authorGoogleId),
+		"authorGoogleId": toSHA1(authorGoogleId + gIdSalt),
 		"imageUrl":       imageUrl,
 		"title":          title,
 		"body":           body,
 		"tags":           strings.Split(tags, ","),
 		"views":          views,
+		"hearts":         hearts,
 		"created":        created,
 	})
 
@@ -345,6 +358,13 @@ func deleteArticleHandler(c *gin.Context) {
 
 	if id != authorGoogleId {
 		panic(noPermission)
+	}
+
+	// Delete hearts
+	q = `DELETE FROM hearts WHERE articleId=$1`
+	_, err = db.Exec(q, articleId)
+	if err != nil {
+		panic(err)
 	}
 
 	// Delete article
@@ -414,10 +434,10 @@ func searchArticlesHandler(c *gin.Context) {
 
 	var rows *sql.Rows
 	if len(searchWords) == 1 && searchWords[0] == "" {
-		q := "SELECT id, author, image_url, title, tags, views, created FROM articles ORDER BY $1 LIMIT $2 OFFSET $3"
+		q := "SELECT id, author, image_url, title, tags, views, hearts, created FROM articles ORDER BY $1 LIMIT $2 OFFSET $3"
 		rows, err = db.Query(q, orderBy, limit, offset)
 	} else {
-		q := "SELECT id, author, image_url, title, tags, views, created FROM articles WHERE vector @@ to_tsquery($1) ORDER BY $2 LIMIT $3 OFFSET $4"
+		q := "SELECT id, author, image_url, title, tags, views, hearts, created FROM articles WHERE vector @@ to_tsquery($1) ORDER BY $2 LIMIT $3 OFFSET $4"
 		rows, err = db.Query(q, search, orderBy, limit, offset)
 	}
 
@@ -435,8 +455,9 @@ func searchArticlesHandler(c *gin.Context) {
 		var title string
 		var tags string
 		var views int
+		var hearts int
 		var created time.Time
-		err = rows.Scan(&id, &author, &imageUrl, &title, &tags, &views, &created)
+		err = rows.Scan(&id, &author, &imageUrl, &title, &tags, &views, &hearts, &created)
 		if err != nil {
 			panic(err)
 		}
@@ -447,6 +468,7 @@ func searchArticlesHandler(c *gin.Context) {
 			"title":    title,
 			"tags":     strings.Split(tags, ","),
 			"views":    views,
+			"hearts":   hearts,
 			"created":  created,
 		})
 	}
@@ -520,4 +542,76 @@ func fetchImageHandler(c *gin.Context) {
 	}
 
 	c.Writer.Write(imageBuffer.Bytes())
+}
+
+func fetchHeartedHandler(c *gin.Context) {
+	defer handleError(c)
+
+	articleId := c.Param("id")
+	userId, _ := c.Get("id")
+
+	// check if heart exists
+	var exists bool
+	q := `SELECT exists(SELECT 1 FROM hearts WHERE articleId=$1 AND userId=$2) AS "exists"`
+	err := db.QueryRow(q, articleId, userId).Scan(&exists)
+	if err != nil {
+		panic(err)
+	}
+
+	c.JSON(200, gin.H{
+		"hearted": exists,
+	})
+}
+
+func toggleHeartHandler(c *gin.Context) {
+	defer handleError(c)
+
+	articleId := c.DefaultPostForm("articleId", "")
+	userId, _ := c.Get("id")
+
+	// check if heart exists
+	var exists bool
+	q := `SELECT exists(SELECT 1 FROM hearts WHERE articleId=$1 AND userId=$2) AS "exists"`
+	err := db.QueryRow(q, articleId, userId).Scan(&exists)
+	if err != nil {
+		panic(err)
+	}
+
+	hearted := false
+	if exists {
+		// Delete heart
+		q := `DELETE FROM hearts WHERE articleId=$1 AND userId=$2`
+		_, err = db.Exec(q, articleId, userId)
+		if err != nil {
+			panic(err)
+		}
+
+		q = `UPDATE articles SET hearts = hearts - 1 WHERE id=$1`
+		_, err = db.Exec(q, articleId)
+		if err != nil {
+			panic(err)
+		}
+
+	} else {
+		// Add heart
+		q := `INSERT INTO hearts(articleId, userId) VALUES ($1, $2)`
+		_, err = db.Exec(q, articleId, userId)
+		if err != nil {
+			panic(err)
+		}
+
+		q = `UPDATE articles SET hearts = hearts + 1 WHERE id=$1`
+		_, err = db.Exec(q, articleId)
+		if err != nil {
+			panic(err)
+		}
+		hearted = true
+	}
+	if err != nil {
+		panic(err)
+	}
+
+	c.JSON(200, gin.H{
+		"hearted": hearted,
+	})
 }
