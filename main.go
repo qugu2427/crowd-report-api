@@ -82,7 +82,7 @@ func main() {
 
 	// Configure cors
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://127.0.0.1:8080", "http://localhost:8080", "https://www.google.com"}
+	config.AllowOrigins = []string{"http://127.0.0.1:8080", "http://192.168.1.37:8080", "http://localhost:8080", "https://www.google.com"}
 	config.AllowMethods = []string{"GET", "POST", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	router.Use(cors.New(config))
@@ -96,19 +96,20 @@ func main() {
 	router.GET("/loginUrl", loginUrlHandler)
 	router.GET("/accessToken", accessTokenHandler)
 	router.GET("/userData", accessTokenMiddleware, userDataHandler)
+	router.GET("/userArticles", accessTokenMiddleware, userArticlesHandler)
 
-	router.POST("/createArticle", accessTokenMiddleware, createArticleHandler)
+	router.POST("/create", accessTokenMiddleware, createHandler)
 	router.GET("/articles/:id", fetchArticleHandler)
 	router.DELETE("/articles/:id", accessTokenMiddleware, deleteArticleHandler)
-	router.GET("/fetchTags", fetchTagsHandler)
+	router.GET("/tags", tagsHandler)
 
 	router.GET("/articles/:id/hearted", accessTokenMiddleware, fetchHeartedHandler)
-	router.POST("/toggleHeart", accessTokenMiddleware, toggleHeartHandler)
+	router.POST("/heart", accessTokenMiddleware, heartHandler)
 
 	router.POST("/uploadImage", accessTokenMiddleware, uploadImageHandler)
 	router.GET("/images/:imageName", fetchImageHandler)
 
-	router.GET("/searchArticles", searchArticlesHandler)
+	router.GET("/search", searchHandler)
 	router.Run(":" + port)
 }
 
@@ -191,9 +192,92 @@ func userDataHandler(c *gin.Context) {
 	})
 }
 
-// Begin database related handlers
+// Responds with articles created by user
+func userArticlesHandler(c *gin.Context) {
+	defer handleError(c)
 
-func createArticleHandler(c *gin.Context) {
+	authorGoogleId, _ := c.Get("id")
+
+	// Check validity of limit and offset
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if err != nil || limit < 1 || limit > 10 {
+		panic(invalidNumber)
+	}
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 {
+		panic(invalidNumber)
+	}
+
+	// Determine sort
+	sort := c.Query("sort")
+	if sort == "popular" {
+		sort = "hearts DESC, views DESC"
+	} else if sort == "new" {
+		fmt.Println("yo")
+		sort = "created DESC"
+	} else if sort == "hearted" {
+		sort = "hearts DESC"
+	} else if sort == "viewed" {
+		sort = "views DESC"
+	} else {
+		panic(invalidNumber)
+	}
+
+	// Perform sql query
+	var rows *sql.Rows
+	q := `SELECT id, author, image_url, title, tags, views, hearts, created FROM articles 
+	WHERE author_google_id=$1 
+	ORDER BY ` + sort + ` LIMIT $2 OFFSET $3`
+	rows, err = db.Query(q, authorGoogleId, limit, offset)
+
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+
+	// Create json response
+	var articles []gin.H
+	for rows.Next() {
+		var id int
+		var author string
+		var imageUrl string
+		var title string
+		var tags string
+		var views int
+		var hearts int
+		var created time.Time
+		err = rows.Scan(&id, &author, &imageUrl, &title, &tags, &views, &hearts, &created)
+		if err != nil {
+			panic(err)
+		}
+		articles = append(articles, gin.H{
+			"id":       id,
+			"author":   author,
+			"imageUrl": imageUrl,
+			"title":    title,
+			"tags":     strings.Split(tags, ","),
+			"views":    views,
+			"hearts":   hearts,
+			"created":  created,
+		})
+	}
+
+	err = rows.Err()
+	if err != nil {
+		if err == sql.ErrNoRows {
+			panic(notFound)
+		} else {
+			panic(err)
+		}
+	}
+
+	c.JSON(200, gin.H{
+		"count":    len(articles),
+		"articles": articles,
+	})
+}
+
+func createHandler(c *gin.Context) {
 	defer handleError(c)
 
 	author, _ := c.Get("name")
@@ -379,7 +463,7 @@ func deleteArticleHandler(c *gin.Context) {
 	})
 }
 
-func fetchTagsHandler(c *gin.Context) {
+func tagsHandler(c *gin.Context) {
 	defer handleError(c)
 
 	q := `SELECT * FROM tags ORDER BY tag`
@@ -404,12 +488,12 @@ func fetchTagsHandler(c *gin.Context) {
 	})
 }
 
-func searchArticlesHandler(c *gin.Context) {
+func searchHandler(c *gin.Context) {
 	defer handleError(c)
 
 	// Check validity of limit and offset
-	limit, err := strconv.Atoi(c.DefaultQuery("limit", "25"))
-	if err != nil || limit < 1 || limit > 100 {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if err != nil || limit < 1 || limit > 10 {
 		panic(invalidNumber)
 	}
 	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
@@ -417,12 +501,41 @@ func searchArticlesHandler(c *gin.Context) {
 		panic(invalidNumber)
 	}
 
-	// Convert sort to order by
-	// For now just using one sort method
-	orderBy := "created DESC"
+	// Determine sort
+	sort := c.Query("sort")
+	if sort == "popular" {
+		sort = "hearts DESC, views DESC"
+	} else if sort == "new" {
+		fmt.Println("yo")
+		sort = "created DESC"
+	} else if sort == "hearted" {
+		sort = "hearts DESC"
+	} else if sort == "viewed" {
+		sort = "views DESC"
+	} else {
+		panic(invalidNumber)
+	}
 
-	// Parse search
-	searchQuery := strings.TrimSpace(c.DefaultQuery("search", ""))
+	// Determine period
+	periodTime := time.Now()
+	period := c.Query("period")
+	if period == "day" {
+		fmt.Println("yo again")
+		periodTime = periodTime.AddDate(-1, 0, 0)
+	} else if period == "week" {
+		periodTime = periodTime.AddDate(-7, 0, 0)
+	} else if period == "month" {
+		periodTime = periodTime.AddDate(0, -1, 0)
+	} else if period == "year" {
+		periodTime = periodTime.AddDate(0, 0, -1)
+	} else if period == "all time" {
+		periodTime = periodTime.AddDate(0, 0, -10)
+	} else {
+		panic(invalidNumber)
+	}
+
+	// Parse search query param q
+	searchQuery := strings.TrimSpace(c.DefaultQuery("q", ""))
 	searchWords := strings.Split(searchQuery, " ")
 	var search string
 	for i := 0; i < len(searchWords); i++ {
@@ -432,13 +545,19 @@ func searchArticlesHandler(c *gin.Context) {
 		}
 	}
 
+	// Perform sql query
 	var rows *sql.Rows
-	if len(searchWords) == 1 && searchWords[0] == "" {
-		q := "SELECT id, author, image_url, title, tags, views, hearts, created FROM articles ORDER BY $1 LIMIT $2 OFFSET $3"
-		rows, err = db.Query(q, orderBy, limit, offset)
+	if len(searchWords) == 1 && searchWords[0] == "" { // If q is empty
+		q := `SELECT id, author, image_url, title, tags, views, hearts, created FROM articles 
+		WHERE created BETWEEN $1 AND CURRENT_TIMESTAMP 
+		ORDER BY ` + sort + ` LIMIT $2 OFFSET $3`
+		rows, err = db.Query(q, periodTime, limit, offset)
 	} else {
-		q := "SELECT id, author, image_url, title, tags, views, hearts, created FROM articles WHERE vector @@ to_tsquery($1) ORDER BY $2 LIMIT $3 OFFSET $4"
-		rows, err = db.Query(q, search, orderBy, limit, offset)
+		q := `SELECT id, author, image_url, title, tags, views, hearts, created FROM articles 
+		WHERE vector @@ to_tsquery($1) 
+		AND created BETWEEN $2 AND CURRENT_TIMESTAMP 
+		ORDER BY ` + sort + ` LIMIT $3 OFFSET $4`
+		rows, err = db.Query(q, search, periodTime, limit, offset)
 	}
 
 	if err != nil {
@@ -472,6 +591,7 @@ func searchArticlesHandler(c *gin.Context) {
 			"created":  created,
 		})
 	}
+
 	err = rows.Err()
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -480,6 +600,7 @@ func searchArticlesHandler(c *gin.Context) {
 			panic(err)
 		}
 	}
+
 	c.JSON(200, gin.H{
 		"count":    len(articles),
 		"articles": articles,
@@ -563,7 +684,7 @@ func fetchHeartedHandler(c *gin.Context) {
 	})
 }
 
-func toggleHeartHandler(c *gin.Context) {
+func heartHandler(c *gin.Context) {
 	defer handleError(c)
 
 	articleId := c.DefaultPostForm("articleId", "")

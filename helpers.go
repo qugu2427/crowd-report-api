@@ -12,11 +12,11 @@ import (
 const (
 	alphaNum     = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"
 	maxImageSize = 500000
-	imageUrlRgx  = "^.{15,75}$"                                   //^https:\/\/api.crowdreport.com\/[0-9a-zA-z]{1,75}$
-	titleRgx     = "^[a-zA-Z\\d][a-zA-Z0\\d ]{13,73}[a-zA-Z\\d]$" //^.{15,75}$
+	imageUrlRgx  = "^.{15,75}$"     //^https:\/\/api.crowdreport.com\/[0-9a-zA-z]{1,75}$
+	titleRgx     = `^\S.{13,73}\S$` //^.{15,75}$
 	tagsRgx      = "^.{1,75}$"
 	tagRgx       = "^\\/?(h[1-6]|p|br|u|strong|em|ul|ol|li|(span|img|iframe)( ?(class=\"[^\"]*\"|style=\"((background-color|color): ?rgb\\( ?[0-9]{1,3}, ?[0-9]{1,3}, ?[0-9]{1,3}\\); ?){1,2}\"|src=\"[^\"]*\"|frameborder=\"[^\"]*\"|allowfullscreen=\"(true|false)\")){0,5}?)$"
-	imagePath    = "http://localhost:4000/images/"
+	imagePath    = "http://192.168.1.37:4000/images/"
 )
 
 var allowedImageMimes = [7]string{"png", "jpg", "jpeg", "gif", "bmp", "jfif", "svg"}
