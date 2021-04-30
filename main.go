@@ -208,6 +208,24 @@ func userArticlesHandler(c *gin.Context) {
 		panic(invalidNumber)
 	}
 
+	// Determine period
+	lowerTimeBound := time.Now()
+	period := c.Query("period")
+	if period == "day" {
+		lowerTimeBound = lowerTimeBound.Add(time.Duration(-24) * time.Hour)
+	} else if period == "week" {
+		lowerTimeBound = lowerTimeBound.Add(time.Duration(-168) * time.Hour)
+	} else if period == "month" {
+		lowerTimeBound = lowerTimeBound.Add(time.Duration(-730) * time.Hour)
+	} else if period == "year" {
+		lowerTimeBound = lowerTimeBound.Add(time.Duration(-8760) * time.Hour)
+	} else if period == "all time" {
+		lowerTimeBound = time.Date(2020, 1, 1, 1, 1, 1, 1, time.Local)
+	} else {
+		panic(invalidNumber)
+	}
+	upperTimeBound := time.Now()
+
 	// Determine sort
 	sort := c.Query("sort")
 	if sort == "popular" {
@@ -225,10 +243,11 @@ func userArticlesHandler(c *gin.Context) {
 
 	// Perform sql query
 	var rows *sql.Rows
-	q := `SELECT id, author, image_url, title, tags, views, hearts, created FROM articles 
-	WHERE author_google_id=$1 
-	ORDER BY ` + sort + ` LIMIT $2 OFFSET $3`
-	rows, err = db.Query(q, authorGoogleId, limit, offset)
+	q := `SELECT id, author, image_url, title, tags, views, hearts, created FROM articles
+	WHERE created >= $1 AND created < $2 
+	AND author_google_id=$3 
+	ORDER BY ` + sort + ` LIMIT $4 OFFSET $5`
+	rows, err = db.Query(q, lowerTimeBound, upperTimeBound, authorGoogleId, limit, offset)
 
 	if err != nil {
 		panic(err)
@@ -277,6 +296,7 @@ func userArticlesHandler(c *gin.Context) {
 	})
 }
 
+// This create handler needs some cleaning up
 func createHandler(c *gin.Context) {
 	defer handleError(c)
 
@@ -506,7 +526,6 @@ func searchHandler(c *gin.Context) {
 	if sort == "popular" {
 		sort = "hearts DESC, views DESC"
 	} else if sort == "new" {
-		fmt.Println("yo")
 		sort = "created DESC"
 	} else if sort == "hearted" {
 		sort = "hearts DESC"
@@ -517,22 +536,22 @@ func searchHandler(c *gin.Context) {
 	}
 
 	// Determine period
-	periodTime := time.Now()
+	lowerTimeBound := time.Now()
 	period := c.Query("period")
 	if period == "day" {
-		fmt.Println("yo again")
-		periodTime = periodTime.AddDate(-1, 0, 0)
+		lowerTimeBound = lowerTimeBound.Add(time.Duration(-24) * time.Hour)
 	} else if period == "week" {
-		periodTime = periodTime.AddDate(-7, 0, 0)
+		lowerTimeBound = lowerTimeBound.Add(time.Duration(-168) * time.Hour)
 	} else if period == "month" {
-		periodTime = periodTime.AddDate(0, -1, 0)
+		lowerTimeBound = lowerTimeBound.Add(time.Duration(-730) * time.Hour)
 	} else if period == "year" {
-		periodTime = periodTime.AddDate(0, 0, -1)
+		lowerTimeBound = lowerTimeBound.Add(time.Duration(-8760) * time.Hour)
 	} else if period == "all time" {
-		periodTime = periodTime.AddDate(0, 0, -10)
+		lowerTimeBound = time.Date(2020, 1, 1, 1, 1, 1, 1, time.Local)
 	} else {
 		panic(invalidNumber)
 	}
+	upperTimeBound := time.Now()
 
 	// Parse search query param q
 	searchQuery := strings.TrimSpace(c.DefaultQuery("q", ""))
@@ -549,15 +568,15 @@ func searchHandler(c *gin.Context) {
 	var rows *sql.Rows
 	if len(searchWords) == 1 && searchWords[0] == "" { // If q is empty
 		q := `SELECT id, author, image_url, title, tags, views, hearts, created FROM articles 
-		WHERE created BETWEEN $1 AND CURRENT_TIMESTAMP 
-		ORDER BY ` + sort + ` LIMIT $2 OFFSET $3`
-		rows, err = db.Query(q, periodTime, limit, offset)
+		WHERE created >= $1 AND created < $2
+		ORDER BY ` + sort + ` LIMIT $3 OFFSET $4`
+		rows, err = db.Query(q, lowerTimeBound, upperTimeBound, limit, offset)
 	} else {
 		q := `SELECT id, author, image_url, title, tags, views, hearts, created FROM articles 
 		WHERE vector @@ to_tsquery($1) 
-		AND created BETWEEN $2 AND CURRENT_TIMESTAMP 
-		ORDER BY ` + sort + ` LIMIT $3 OFFSET $4`
-		rows, err = db.Query(q, search, periodTime, limit, offset)
+		AND created >= $2 AND created <= $3 
+		ORDER BY ` + sort + ` LIMIT $4 OFFSET $5`
+		rows, err = db.Query(q, search, lowerTimeBound, upperTimeBound, limit, offset)
 	}
 
 	if err != nil {
