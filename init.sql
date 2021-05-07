@@ -29,3 +29,4 @@ INSERT INTO tags (tag) VALUES ('education');
 INSERT INTO tags (tag) VALUES ('politics');
 INSERT INTO tags (tag) VALUES ('opinion');
 INSERT INTO tags (tag) VALUES ('buisness');
+INSERT INTO tags (tag) VALUES ('gaming');
