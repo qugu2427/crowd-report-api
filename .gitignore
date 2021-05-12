@@ -1,2 +1,2 @@
 secrets.env
-src/secrets.go
+dist/secrets.env
