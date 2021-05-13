@@ -33,7 +33,6 @@ func handleError(c *gin.Context) {
 		if reflect.TypeOf(r) != reflect.TypeOf(unknownError) {
 			fmt.Println("[FATAL] unexpected error")
 			fmt.Println(r)
-			fmt.Println()
 			r = unknownError
 		}
 		c.Abort()

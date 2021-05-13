@@ -25,7 +25,7 @@ func handleRouting() {
 	router := gin.Default()
 
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"https://www.crowdreport.me", "https://www.google.com"}
+	config.AllowOrigins = []string{"75.70.204.184:8080", "https://www.crowdreport.me", "https://www.google.com"}
 	config.AllowMethods = []string{"GET", "POST", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	router.Use(cors.New(config))
