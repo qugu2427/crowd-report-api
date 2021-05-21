@@ -445,8 +445,8 @@ func searchHandler(c *gin.Context) {
 	defer handleError(c)
 
 	// Check validity of limit and offset
-	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	if err != nil || limit < 1 || limit > 10 {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "12"))
+	if err != nil || limit < 1 || limit > 12 {
 		panic(invalidNumber)
 	}
 	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
@@ -465,6 +465,7 @@ func searchHandler(c *gin.Context) {
 	} else if sort == "viewed" {
 		sort = "views DESC"
 	} else {
+		fmt.Println("[ERROR DEBUG]: \"" + sort + "\" is not a valid sort")
 		panic(invalidNumber)
 	}
 
@@ -482,6 +483,7 @@ func searchHandler(c *gin.Context) {
 	} else if period == "all time" {
 		lowerTimeBound = time.Date(2020, 1, 1, 1, 1, 1, 1, time.Local)
 	} else {
+		fmt.Println("[ERROR DEBUG]: \"" + period + "\" is not a valid period")
 		panic(invalidNumber)
 	}
 
