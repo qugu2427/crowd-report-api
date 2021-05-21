@@ -445,8 +445,8 @@ func searchHandler(c *gin.Context) {
 	defer handleError(c)
 
 	// Check validity of limit and offset
-	limit, err := strconv.Atoi(c.DefaultQuery("limit", "12"))
-	if err != nil || limit < 1 || limit > 12 {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "6"))
+	if err != nil || limit < 1 || limit > 16 {
 		panic(invalidNumber)
 	}
 	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
