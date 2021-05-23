@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -66,4 +67,31 @@ func validateArticleBody(body string) bool {
 		}
 	}
 	return true
+}
+
+func determinePeriod(periodQuery string) time.Time {
+	period := time.Now()
+	if periodQuery == "day" {
+		period = period.Add(time.Duration(-24) * time.Hour)
+	} else if periodQuery == "week" {
+		period = period.Add(time.Duration(-168) * time.Hour)
+	} else if periodQuery == "month" {
+		period = period.Add(time.Duration(-730) * time.Hour)
+	} else if periodQuery == "year" {
+		period = period.Add(time.Duration(-8760) * time.Hour)
+	} else { // all time
+		period = time.Date(2020, 1, 1, 1, 1, 1, 1, time.Local)
+	}
+	return period
+}
+
+func determineSort(sortQuery string) string {
+	if sortQuery == "new" {
+		return "created DESC"
+	} else if sortQuery == "hearted" {
+		return "hearts DESC"
+	} else if sortQuery == "viewed" {
+		return "views DESC"
+	}
+	return "hearts DESC, views DESC" // popular
 }

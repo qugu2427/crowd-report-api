@@ -31,7 +31,7 @@ var (
 func handleError(c *gin.Context) {
 	if r := recover(); r != nil {
 		if reflect.TypeOf(r) != reflect.TypeOf(unknownError) {
-			fmt.Println("[FATAL] unexpected error")
+			fmt.Println("unexpected error")
 			fmt.Println(r)
 			r = unknownError
 		}
