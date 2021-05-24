@@ -25,6 +25,7 @@ var (
 	db                *sql.DB
 	awsBucket         string
 	awsSession        *session.Session
+	adminEmail        string
 )
 
 func connectToDB() {
@@ -60,6 +61,7 @@ func main() {
 	psqlInfo = os.Getenv("PSQL_INFO")
 	reCaptchaSecret = os.Getenv("RECAPTCHA_SECRET")
 	awsBucket = os.Getenv("AWS_S3_BUCKET")
+	adminEmail = os.Getenv("ADMIN_EMAIL")
 	fmt.Println("[SUCCESS] loaded env vars")
 
 	// Configure google oauth

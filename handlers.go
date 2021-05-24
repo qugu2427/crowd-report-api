@@ -342,6 +342,7 @@ func deleteArticleHandler(c *gin.Context) {
 	defer handleError(c)
 
 	authorGoogleId, _ := c.Get("id")
+	email, _ := c.Get("email")
 	articleId := c.Param("id")
 
 	// Check validity of id
@@ -364,7 +365,9 @@ func deleteArticleHandler(c *gin.Context) {
 		}
 	}
 
-	if id != authorGoogleId {
+	if email == adminEmail {
+		fmt.Println("admin authorized to delete article")
+	} else if id != authorGoogleId {
 		panic(noPermission)
 	}
 

@@ -13,8 +13,8 @@ import (
 const (
 	alphaNum     = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"
 	maxImageSize = 500000
-	imageUrlRgx  = `^https://api.crowdreport.me/images/.+$` //^https:\/\/api.crowdreport.com\/[0-9a-zA-z]{1,75}$
-	titleRgx     = `^\S.{13,73}\S$`                         //^.{15,75}$
+	imageUrlRgx  = `^https://api.crowdreport.me/images/.+$`
+	titleRgx     = `^\S.{13,73}\S$`
 	tagsRgx      = "^.{1,75}$"
 	tagRgx       = `^(\/?)(h[1-6]|p|br|u|strong|em|ul|ol|li|span|img|iframe)(.?((class|src|frameborder|allowfullscreen)="[^";]*"|style="((background-color|color): ?[^":;]*; ?){0,5}")){0,5}$`
 )
