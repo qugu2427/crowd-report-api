@@ -1,4 +1,5 @@
-Endpoints
+This is the backend api for crowdreport.me<br>
+<h3>Endpoints</h3>
 🛑 = Authorization header required
 
 	GET /loginUrl
@@ -10,16 +11,19 @@ Endpoints
 	GET /userData 🛑
 	Gets user data.
 
+	GET /userArticles?limit=25&offset=0 🛑
+	Gets articles of user.
+
 	POST /createArticle 🛑
 	Creates article.
 
 	GET /articles/:id
 	Gets article.
 
-	DELETE /deleteArticle 🛑
+	DELETE /articles/:id 🛑
 	Deletes article
 
-	GET /fetchTags
+	GET /tags
 	Gets tags.
 
 	POST /uploadImage 🛑
@@ -28,5 +32,5 @@ Endpoints
 	GET /images/:imageName
 	Gets an image.
 
-	GET /searchArticles?search=xxx&limit=25&offset=0
+	GET /search?q=xxx&limit=25&offset=0
 	Gets list of articles.
