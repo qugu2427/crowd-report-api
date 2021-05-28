@@ -45,14 +45,14 @@ func main() {
 	// Load env vars
 	err := godotenv.Load("./secrets.env")
 	if err != nil {
-		fmt.Println("[FATAL] failed to load ./secrets.env file")
-		log.Fatal("failed to load ./secrets.env file")
+		fmt.Println("failed to load ./secrets.env file (fatal)")
+		log.Fatal("failed to load ./secrets.env file (fatal)")
 	}
 
 	port = os.Getenv("PORT") // port env var is passed by aws
 	if port == "" {
 		port = "5000"
-		fmt.Println("[WARNING] no port env found setting default port")
+		fmt.Println("no port env found setting default port (warning)")
 	}
 	signInUrl = os.Getenv("SIGN_IN_URL")
 	imagePath = os.Getenv("IMAGE_PATH")
@@ -72,13 +72,13 @@ func main() {
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint:     google.Endpoint,
 	}
-	fmt.Println("[SUCCESS] loaded google oauth")
+	fmt.Println("loaded google oauth")
 
 	awsSession = session.Must(session.NewSession(&aws.Config{Region: aws.String("us-west-1")}))
-	fmt.Println("[SUCCESS] aws session")
+	fmt.Println("loaded aws session")
 
 	connectToDB()
-	fmt.Println("[SUCCESS] connected to database")
+	fmt.Println("connected to database")
 
 	handleRouting()
 }

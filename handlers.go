@@ -207,10 +207,10 @@ func createHandler(c *gin.Context) {
 
 	author, _ := c.Get("name")
 	authorGoogleId, _ := c.Get("id")
-	imageUrl := strings.TrimSpace(c.DefaultPostForm("imageUrl", ""))
+	imageUrl := c.DefaultPostForm("imageUrl", "")
 	title := c.DefaultPostForm("title", "")
 	body := c.DefaultPostForm("body", "")
-	tags := strings.TrimSpace(c.DefaultPostForm("tags", ""))
+	tags := c.DefaultPostForm("tags", "")
 	captcha := c.DefaultPostForm("captcha", "")
 
 	// Validate captcha
