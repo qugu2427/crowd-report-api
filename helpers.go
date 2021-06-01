@@ -19,7 +19,7 @@ const (
 	tagRgx       = `^(\/?)(h[1-6]|p|br|u|strong|em|ul|ol|li|span|img|iframe)(.?((class|src|frameborder|allowfullscreen)="[^";]*"|style="((background-color|color): ?[^":;]*; ?){0,5}")){0,5}$`
 )
 
-var allowedImageMimes = [7]string{"png", "jpg", "jpeg", "gif", "bmp", "jfif", "svg"}
+var allowedImageMimes = [8]string{"png", "jpg", "jpeg", "gif", "bmp", "jfif", "svg", "webp"}
 
 func getMime(fileName string) string {
 	mime := ""

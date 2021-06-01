@@ -213,6 +213,11 @@ func createHandler(c *gin.Context) {
 	tags := c.DefaultPostForm("tags", "")
 	captcha := c.DefaultPostForm("captcha", "")
 
+	replaceId, err := strconv.Atoi(c.DefaultPostForm("replaceId", "-1"))
+	if err != nil {
+		panic(invalidNumber)
+	}
+
 	// Validate captcha
 	response, err := http.Get("https://www.google.com/recaptcha/api/siteverify?secret=" + reCaptchaSecret + "&response=" + captcha + "&remoteip=" + c.ClientIP())
 	if response.StatusCode < 200 || response.StatusCode > 299 {
@@ -268,9 +273,16 @@ func createHandler(c *gin.Context) {
 	}
 
 	// Create new article and scan id
+	// Or update existing article
 	var id int
-	q := `INSERT INTO articles (author, author_google_id, image_url, title, body, tags) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
-	err = db.QueryRow(q, author, authorGoogleId, imageUrl, title, body, tags).Scan(&id)
+	var q string
+	if replaceId > -1 {
+		q = `UPDATE articles SET author = $1, author_google_id = $2, image_url = $3, title = $4, body = $5, tags = $6 WHERE id = $7 RETURNING id`
+		err = db.QueryRow(q, author, authorGoogleId, imageUrl, title, body, tags, replaceId).Scan(&id)
+	} else {
+		q = `INSERT INTO articles (author, author_google_id, image_url, title, body, tags) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
+		err = db.QueryRow(q, author, authorGoogleId, imageUrl, title, body, tags).Scan(&id)
+	}
 	if err != nil {
 		panic(err)
 	}
